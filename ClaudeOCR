@@ -1,0 +1,637 @@
+import os
+import argparse
+from pdf2image import convert_from_path
+import pytesseract
+import cv2
+import numpy as np
+import pandas as pd
+from PIL import Image
+
+def convert_pdf_to_images(pdf_path, output_folder, dpi=300):
+    """
+    Convert PDF pages to images
+    
+    Args:
+        pdf_path: Path to the PDF file
+        output_folder: Folder to save the image files
+        dpi: Image resolution (dots per inch)
+        
+    Returns:
+        List of paths to the saved images
+    """
+    # Create output folder if it doesn't exist
+    os.makedirs(output_folder, exist_ok=True)
+    
+    # Convert PDF to images
+    print(f"Converting PDF: {pdf_path} to images...")
+    images = convert_from_path(pdf_path, dpi=dpi)
+    
+    # Save images
+    image_paths = []
+    for i, image in enumerate(images):
+        image_path = os.path.join(output_folder, f"page_{i+1}.png")
+        image.save(image_path, "PNG")
+        image_paths.append(image_path)
+        
+    print(f"Saved {len(image_paths)} images to {output_folder}")
+    return image_paths
+
+def preprocess_image(image_path):
+    """
+    Preprocess the image for better OCR and table detection
+    
+    Args:
+        image_path: Path to the image file
+        
+    Returns:
+        Preprocessed image (OpenCV format)
+    """
+    # Read the image
+    img = cv2.imread(image_path)
+    
+    # Convert to grayscale
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+    # Apply Gaussian blur to reduce noise
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    
+    # Adaptive thresholding to handle varying light conditions
+    binary = cv2.adaptiveThreshold(
+        blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+        cv2.THRESH_BINARY_INV, 11, 2
+    )
+    
+    # Alternatively, use Otsu's method
+    # _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    
+    return img, gray, binary
+
+def detect_table_structure(binary_img):
+    """
+    Detect table structure including merged cells
+    
+    Args:
+        binary_img: Binarized image
+        
+    Returns:
+        Horizontal and vertical lines, and the image with detected lines
+    """
+    # Create copies of the binary image
+    horizontal = binary_img.copy()
+    vertical = binary_img.copy()
+    
+    # Specify size on horizontal axis
+    cols = horizontal.shape[1]
+    horizontal_size = cols // 30
+    
+    # Create structure element for extracting horizontal lines
+    horizontalStructure = cv2.getStructuringElement(cv2.MORPH_RECT, (horizontal_size, 1))
+    
+    # Apply morphology operations
+    horizontal = cv2.erode(horizontal, horizontalStructure)
+    horizontal = cv2.dilate(horizontal, horizontalStructure)
+    
+    # Specify size on vertical axis
+    rows = vertical.shape[0]
+    vertical_size = rows // 30
+    
+    # Create structure element for extracting vertical lines
+    verticalStructure = cv2.getStructuringElement(cv2.MORPH_RECT, (1, vertical_size))
+    
+    # Apply morphology operations
+    vertical = cv2.erode(vertical, verticalStructure)
+    vertical = cv2.dilate(vertical, verticalStructure)
+    
+    # Create a mask which includes the tables
+    mask = horizontal + vertical
+    
+    # Find contours in the mask
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # Sort contours by area (largest first)
+    contours = sorted(contours, key=cv2.contourArea, reverse=True)
+    
+    return horizontal, vertical, mask, contours
+
+def detect_line_segments(horizontal, vertical):
+    """
+    Detect all horizontal and vertical line segments
+    
+    Args:
+        horizontal: Horizontal lines image
+        vertical: Vertical lines image
+        
+    Returns:
+        Lists of horizontal and vertical line segments
+    """
+    # Detect horizontal line segments
+    h_lines = cv2.HoughLinesP(
+        horizontal, 
+        rho=1, 
+        theta=np.pi/180, 
+        threshold=100, 
+        minLineLength=horizontal.shape[1]//10,
+        maxLineGap=20
+    )
+    
+    # Detect vertical line segments
+    v_lines = cv2.HoughLinesP(
+        vertical, 
+        rho=1, 
+        theta=np.pi/180, 
+        threshold=100, 
+        minLineLength=vertical.shape[0]//10, 
+        maxLineGap=20
+    )
+    
+    # Extract and clean up horizontal lines
+    h_segments = []
+    if h_lines is not None:
+        for line in h_lines:
+            x1, y1, x2, y2 = line[0]
+            # Ensure it's actually horizontal (small y difference)
+            if abs(y2 - y1) < 10:
+                h_segments.append((min(x1, x2), y1, max(x1, x2), y2))
+    
+    # Extract and clean up vertical lines
+    v_segments = []
+    if v_lines is not None:
+        for line in v_lines:
+            x1, y1, x2, y2 = line[0]
+            # Ensure it's actually vertical (small x difference)
+            if abs(x2 - x1) < 10:
+                v_segments.append((x1, min(y1, y2), x2, max(y1, y2)))
+    
+    return h_segments, v_segments
+
+def find_grid_intersections(h_segments, v_segments, tolerance=5):
+    """
+    Find all grid intersections from horizontal and vertical line segments
+    
+    Args:
+        h_segments: List of horizontal line segments (x1, y1, x2, y2)
+        v_segments: List of vertical line segments (x1, y1, x2, y2)
+        tolerance: Pixel tolerance for intersection detection
+        
+    Returns:
+        List of intersection points (x, y)
+    """
+    intersections = []
+    
+    for h_x1, h_y1, h_x2, h_y2 in h_segments:
+        h_y = (h_y1 + h_y2) // 2  # Average y-coordinate for horizontal line
+        
+        for v_x1, v_y1, v_x2, v_y2 in v_segments:
+            v_x = (v_x1 + v_x2) // 2  # Average x-coordinate for vertical line
+            
+            # Check if vertical line spans this y-coordinate
+            if v_y1 - tolerance <= h_y <= v_y2 + tolerance:
+                # Check if horizontal line spans this x-coordinate
+                if h_x1 - tolerance <= v_x <= h_x2 + tolerance:
+                    intersections.append((v_x, h_y))
+    
+    return intersections
+
+def cluster_points(points, axis=0, tolerance=5):
+    """
+    Cluster points along a specific axis
+    
+    Args:
+        points: List of points (x, y)
+        axis: Axis to cluster on (0 for x, 1 for y)
+        tolerance: Maximum distance between points in the same cluster
+        
+    Returns:
+        Dictionary mapping cluster centers to lists of points
+    """
+    if not points:
+        return {}
+        
+    # Sort points by the specified axis
+    sorted_points = sorted(points, key=lambda p: p[axis])
+    
+    clusters = {}
+    current_value = sorted_points[0][axis]
+    current_cluster = [sorted_points[0]]
+    
+    for point in sorted_points[1:]:
+        if abs(point[axis] - current_value) <= tolerance:
+            current_cluster.append(point)
+        else:
+            # Calculate average position for the cluster
+            avg_pos = sum(p[axis] for p in current_cluster) // len(current_cluster)
+            clusters[avg_pos] = current_cluster
+            
+            # Start a new cluster
+            current_value = point[axis]
+            current_cluster = [point]
+    
+    # Add the last cluster
+    if current_cluster:
+        avg_pos = sum(p[axis] for p in current_cluster) // len(current_cluster)
+        clusters[avg_pos] = current_cluster
+    
+    return clusters
+
+def identify_cells_from_grid(intersections, img_shape, tolerance=5):
+    """
+    Identify cells from a grid of intersections, handling merged cells
+    
+    Args:
+        intersections: List of intersection points (x, y)
+        img_shape: Shape of the original image (height, width)
+        tolerance: Pixel tolerance for point clustering
+        
+    Returns:
+        List of cell coordinates (x1, y1, x2, y2) including merged cells
+    """
+    # Cluster points by y-coordinate (rows)
+    row_clusters = cluster_points(intersections, axis=1, tolerance=tolerance)
+    row_positions = sorted(row_clusters.keys())
+    
+    # Cluster points by x-coordinate (columns)
+    col_clusters = cluster_points(intersections, axis=0, tolerance=tolerance)
+    col_positions = sorted(col_clusters.keys())
+    
+    # Create a 2D grid to represent the presence of intersection points
+    grid = np.zeros((len(row_positions), len(col_positions)), dtype=bool)
+    
+    # Map from grid coordinates to pixel coordinates
+    row_map = {i: pos for i, pos in enumerate(row_positions)}
+    col_map = {i: pos for i, pos in enumerate(col_positions)}
+    
+    # Fill in the grid with detected intersections
+    for x, y in intersections:
+        # Find the closest row and column positions
+        row_idx = min(range(len(row_positions)), key=lambda i: abs(row_positions[i] - y))
+        col_idx = min(range(len(col_positions)), key=lambda i: abs(col_positions[i] - x))
+        
+        # Mark this grid cell as having an intersection
+        grid[row_idx, col_idx] = True
+    
+    # Identify all cells including merged cells
+    cells = []
+    
+    # Scan the grid to find cells
+    for row_start in range(len(row_positions) - 1):
+        for col_start in range(len(col_positions) - 1):
+            # Check if we have a valid cell starting point (top-left corner)
+            if not grid[row_start, col_start]:
+                continue
+                
+            # Find how far right this cell extends (handle horizontal merging)
+            col_end = col_start
+            for c in range(col_start + 1, len(col_positions)):
+                if grid[row_start, c]:
+                    col_end = c
+                    break
+            
+            # Find how far down this cell extends (handle vertical merging)
+            row_end = row_start
+            for r in range(row_start + 1, len(row_positions)):
+                if grid[r, col_start]:
+                    row_end = r
+                    break
+            
+            # Now check if we have a valid bottom-right corner
+            if grid[row_end, col_end]:
+                # Valid cell found
+                top_left = (col_map[col_start], row_map[row_start])
+                bottom_right = (col_map[col_end], row_map[row_end])
+                
+                # Add the cell
+                cells.append((
+                    top_left[0], top_left[1],          # x1, y1
+                    bottom_right[0], bottom_right[1]   # x2, y2
+                ))
+                
+                # Optional: Mark this region as processed to avoid duplicate cells
+                # Not strictly necessary but can be added for efficiency
+    
+    return cells
+
+def extract_text_from_cells(cells, gray_img, original_img):
+    """
+    Extract text from each cell using OCR, handling merged cells
+    
+    Args:
+        cells: List of cell coordinates (x1, y1, x2, y2)
+        gray_img: Grayscale image for OCR
+        original_img: Original image for visualization
+        
+    Returns:
+        List of dictionaries containing cell coordinates and extracted text,
+        and an image showing the detected cells and extracted text
+    """
+    cell_data = []
+    img_with_cells = original_img.copy()
+    
+    for i, (x1, y1, x2, y2) in enumerate(cells):
+        # Ensure coordinates are valid
+        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+        
+        # Add a small margin inside the cell for better text extraction
+        margin = 2
+        x1_inner = x1 + margin
+        y1_inner = y1 + margin
+        x2_inner = x2 - margin
+        y2_inner = y2 - margin
+        
+        # Ensure coordinates are within image bounds
+        height, width = gray_img.shape
+        x1_inner = max(0, min(x1_inner, width - 1))
+        y1_inner = max(0, min(y1_inner, height - 1))
+        x2_inner = max(0, min(x2_inner, width - 1))
+        y2_inner = max(0, min(y2_inner, height - 1))
+        
+        # Skip invalid cells
+        if x2_inner <= x1_inner or y2_inner <= y1_inner:
+            continue
+        
+        # Draw the cell on the image
+        cell_color = (0, 255, 0)  # Green for normal cells
+        cell_thickness = 2
+        
+        # Check if this might be a merged cell (significantly larger than average)
+        cell_width = x2 - x1
+        cell_height = y2 - y1
+        if cell_width > 100 or cell_height > 40:  # Adjust thresholds as needed
+            # Likely a merged cell - use a different color
+            cell_color = (0, 165, 255)  # Orange for merged cells
+            cell_thickness = 3
+        
+        cv2.rectangle(img_with_cells, (x1, y1), (x2, y2), cell_color, cell_thickness)
+        
+        # Extract the cell region for OCR
+        try:
+            cell_img = gray_img[y1_inner:y2_inner, x1_inner:x2_inner]
+            
+            # Skip empty cells
+            if cell_img.size == 0 or np.mean(cell_img) > 240:  # Skip if mostly white
+                continue
+            
+            # Apply additional preprocessing for better OCR
+            _, cell_binary = cv2.threshold(cell_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            
+            # Apply morphological operations to clean up the image
+            kernel = np.ones((2, 2), np.uint8)
+            cell_binary = cv2.morphologyEx(cell_binary, cv2.MORPH_OPEN, kernel)
+            
+            # Convert to PIL Image for Tesseract
+            pil_img = Image.fromarray(cell_binary)
+            
+            # Extract text using OCR
+            # PSM modes: 6 = Assume a single uniform block of text, 4 = Assume a single column of text
+            config = '--psm 6 --oem 3'
+            text = pytesseract.image_to_string(pil_img, config=config)
+            text = text.strip()
+            
+            # Add the text to the image
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.4
+            font_color = (255, 0, 0)  # Red color for text overlay
+            cv2.putText(img_with_cells, f"Cell {i}: {text[:10]}...", 
+                        (x1, y1 - 5), font, font_scale, font_color, 1)
+            
+            # Store cell data with information about merged status
+            is_merged_horiz = cell_width > 100  # Adjust threshold as needed
+            is_merged_vert = cell_height > 40   # Adjust threshold as needed
+            
+            cell_data.append({
+                'id': i,
+                'x1': x1,
+                'y1': y1,
+                'x2': x2,
+                'y2': y2,
+                'width': cell_width,
+                'height': cell_height,
+                'text': text,
+                'is_merged_horiz': is_merged_horiz,
+                'is_merged_vert': is_merged_vert,
+                'row': None,  # To be determined
+                'col': None   # To be determined
+            })
+        except Exception as e:
+            print(f"Warning: Error processing cell {i}: {str(e)}")
+    
+    return cell_data, img_with_cells
+
+def determine_table_structure(cell_data, row_tolerance=10, col_tolerance=10):
+    """
+    Determine the table structure with merged cells
+    
+    Args:
+        cell_data: List of dictionaries containing cell information
+        row_tolerance: Pixel tolerance for row position clustering
+        col_tolerance: Pixel tolerance for column position clustering
+        
+    Returns:
+        DataFrame representing the table, handling merged cells
+    """
+    if not cell_data:
+        return pd.DataFrame()  # Return empty DataFrame if no cells were found
+    
+    # Extract all cell positions
+    y_positions = [cell['y1'] for cell in cell_data]
+    x_positions = [cell['x1'] for cell in cell_data]
+    
+    # Cluster row positions
+    rows = {}
+    for y in y_positions:
+        assigned = False
+        for row_y in sorted(rows.keys()):
+            if abs(y - row_y) <= row_tolerance:
+                rows[row_y].append(y)
+                assigned = True
+                break
+        if not assigned:
+            rows[y] = [y]
+    
+    # Map each y position to its row index
+    unique_rows = sorted(rows.keys())
+    row_indices = {y: i for i, row_y in enumerate(unique_rows) for y in rows[row_y]}
+    
+    # Cluster column positions
+    cols = {}
+    for x in x_positions:
+        assigned = False
+        for col_x in sorted(cols.keys()):
+            if abs(x - col_x) <= col_tolerance:
+                cols[col_x].append(x)
+                assigned = True
+                break
+        if not assigned:
+            cols[x] = [x]
+    
+    # Map each x position to its column index
+    unique_cols = sorted(cols.keys())
+    col_indices = {x: i for i, col_x in enumerate(unique_cols) for x in cols[col_x]}
+    
+    # Assign row and column indices to each cell
+    for cell in cell_data:
+        cell['row'] = row_indices.get(cell['y1'], 0)
+        cell['col'] = col_indices.get(cell['x1'], 0)
+    
+    # Determine the dimensions of the table
+    num_rows = len(unique_rows)
+    num_cols = len(unique_cols)
+    
+    # Initialize an empty table
+    table = pd.DataFrame(None, index=range(num_rows), columns=range(num_cols))
+    
+    # First pass: Add all cell data to the table
+    for cell in cell_data:
+        row, col = cell['row'], cell['col']
+        if 0 <= row < num_rows and 0 <= col < num_cols:
+            table.at[row, col] = cell['text']
+    
+    # Second pass: Handle merged cells (horizontal)
+    for cell in cell_data:
+        if cell['is_merged_horiz']:
+            # Find all columns this cell might span
+            start_col = cell['col']
+            
+            # Estimate how many columns this cell might span based on width ratio
+            # Compare this cell's width with the average width of non-merged cells
+            avg_width = np.mean([c['width'] for c in cell_data if not c['is_merged_horiz']])
+            if avg_width > 0:
+                span = min(int(cell['width'] / avg_width + 0.5), num_cols - start_col)
+                
+                # Mark spanned columns as merged
+                for col in range(start_col + 1, start_col + span):
+                    if col < num_cols and pd.isna(table.at[cell['row'], col]):
+                        table.at[cell['row'], col] = "MERGED_HORIZ"
+    
+    # Third pass: Handle merged cells (vertical)
+    for cell in cell_data:
+        if cell['is_merged_vert']:
+            # Find all rows this cell might span
+            start_row = cell['row']
+            
+            # Estimate how many rows this cell might span based on height ratio
+            avg_height = np.mean([c['height'] for c in cell_data if not c['is_merged_vert']])
+            if avg_height > 0:
+                span = min(int(cell['height'] / avg_height + 0.5), num_rows - start_row)
+                
+                # Mark spanned rows as merged
+                for row in range(start_row + 1, start_row + span):
+                    if row < num_rows and pd.isna(table.at[row, cell['col']]):
+                        table.at[row, cell['col']] = "MERGED_VERT"
+    
+    # Replace NaN values with empty strings
+    table = table.fillna('')
+    
+    # Clean up the merged cell markers for the final output
+    for row in range(num_rows):
+        for col in range(num_cols):
+            if table.at[row, col] in ["MERGED_HORIZ", "MERGED_VERT"]:
+                table.at[row, col] = ""
+    
+    return table
+
+def save_table_as_csv(df, output_path):
+    """
+    Save the extracted table as a CSV file
+    
+    Args:
+        df: DataFrame containing the table data
+        output_path: Path to save the CSV file
+    """
+    df.to_csv(output_path, index=False, header=False)
+    print(f"Table saved to {output_path}")
+
+def main():
+    parser = argparse.ArgumentParser(description='Extract tables from PDF using OCR')
+    parser.add_argument('pdf_path', help='Path to the PDF file')
+    parser.add_argument('--output_folder', default='output', help='Output folder for images and CSV')
+    parser.add_argument('--dpi', type=int, default=300, help='DPI for PDF to image conversion')
+    args = parser.parse_args()
+    
+    # Create output folders
+    os.makedirs(args.output_folder, exist_ok=True)
+    images_folder = os.path.join(args.output_folder, 'images')
+    os.makedirs(images_folder, exist_ok=True)
+    
+    # Step 1: Convert PDF to images
+    image_paths = convert_pdf_to_images(args.pdf_path, images_folder, args.dpi)
+    
+    # Process each image
+    for i, image_path in enumerate(image_paths):
+        print(f"\nProcessing image {i+1}/{len(image_paths)}: {image_path}")
+        
+        try:
+            # Step 2: Preprocess the image
+            img, gray, binary = preprocess_image(image_path)
+            
+            # Step 3: Detect table structure
+            horizontal, vertical, mask, contours = detect_table_structure(binary)
+            
+            # Save debug images
+            cv2.imwrite(os.path.join(args.output_folder, f"horizontal_lines_{i+1}.png"), horizontal)
+            cv2.imwrite(os.path.join(args.output_folder, f"vertical_lines_{i+1}.png"), vertical)
+            cv2.imwrite(os.path.join(args.output_folder, f"table_mask_{i+1}.png"), mask)
+            
+            # Step 4: Detect line segments
+            h_segments, v_segments = detect_line_segments(horizontal, vertical)
+            
+            # Draw line segments for debugging
+            line_img = img.copy()
+            for x1, y1, x2, y2 in h_segments:
+                cv2.line(line_img, (x1, y1), (x2, y2), (0, 0, 255), 2)
+            for x1, y1, x2, y2 in v_segments:
+                cv2.line(line_img, (x1, y1), (x2, y2), (255, 0, 0), 2)
+            cv2.imwrite(os.path.join(args.output_folder, f"detected_lines_{i+1}.png"), line_img)
+            
+            # Step 5: Find grid intersections
+            intersections = find_grid_intersections(h_segments, v_segments)
+            
+            # Draw intersections for debugging
+            intersection_img = img.copy()
+            for x, y in intersections:
+                cv2.circle(intersection_img, (x, y), 5, (0, 255, 255), -1)
+            cv2.imwrite(os.path.join(args.output_folder, f"intersections_{i+1}.png"), intersection_img)
+            
+            # Step 6: Identify cells from the grid
+            cells = identify_cells_from_grid(intersections, img.shape[:2])
+            
+            # Step 7: Extract text from cells
+            cell_data, img_with_cells = extract_text_from_cells(cells, gray, img)
+            cv2.imwrite(os.path.join(args.output_folder, f"detected_cells_{i+1}.png"), img_with_cells)
+            
+            # Step 8: Determine table structure with merged cells
+            table_df = determine_table_structure(cell_data)
+            
+            # Step 9: Save table as CSV
+            output_csv_path = os.path.join(args.output_folder, f"extracted_table_{i+1}.csv")
+            save_table_as_csv(table_df, output_csv_path)
+            
+            print(f"Successfully processed image {i+1} and extracted table with merged cells")
+            
+            # Additionally, save the DataFrame as HTML to better visualize the table structure
+            html_path = os.path.join(args.output_folder, f"table_view_{i+1}.html")
+            with open(html_path, 'w') as f:
+                table_html = table_df.to_html(index=False, header=False)
+                f.write(f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <style>
+                        table {{ border-collapse: collapse; width: 100%; }}
+                        th, td {{ border: 1px solid black; padding: 8px; text-align: left; }}
+                    </style>
+                </head>
+                <body>
+                    <h2>Extracted Table with Merged Cells</h2>
+                    {table_html}
+                </body>
+                </html>
+                """)
+            print(f"Table visualization saved to {html_path}")
+            
+        except Exception as e:
+            print(f"Error processing image {i+1}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
+if __name__ == "__main__":
+    main()
