@@ -37,6 +37,6 @@ def extract_pdf_pages(input_pdf_path, output_pdf_path, start_page, end_page):
 input_pdf = "./data/HDFCNew.pdf"  # Replace with your input PDF file path
 output_pdf = "./data/HDFC1.pdf" # Replace with your desired output PDF file path
 start_page_num = 1
-end_page_num = 1
+end_page_num = 2
 
 extract_pdf_pages(input_pdf, output_pdf, start_page_num, end_page_num)

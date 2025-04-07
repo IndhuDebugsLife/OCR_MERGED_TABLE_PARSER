@@ -22,15 +22,16 @@ def visualize_cell_and_segment(image_path, cell, segment, output_path="visualiza
 
     # Draw the segment
     x1_seg, y1_seg, x2_seg, y2_seg = map(int, segment)
-    cv2.line(img, (x1_seg, y1_seg), (x2_seg, y2_seg), (255, 0, 0), 2)  # Blue line
+    cv2.line(img, (x1_seg, y1_seg), (x2_seg, y2_seg), (255, 255, 0), 2)  # Blue line
 
     # Save the image
     cv2.imwrite(output_path, img)
     print(f"Visualization saved to {output_path}")
 
 if __name__ == "__main__":
-    image_path = "./data/images/page_1.png"  # Replace with your image path
+    image_path = "./data/images/page_2.png"  # Replace with your image path
    # cell = (561, 2582, 945, 2649) 
-    cell =(1390, 1617, 2000, 1942)
-    segment = (118, 1944, 557, 1944)
-    visualize_cell_and_segment(image_path, cell, segment)
+    cell =(0, 0, 0, 0)
+    segment =110, 241, 2358, 241
+
+    visualize_cell_and_segment(image_path, cell, segment) 

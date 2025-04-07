@@ -1,0 +1,464 @@
+{
+  "pages": [
+    {
+      "num_rows": 10,
+      "num_cols": 5,
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "text": "Cardvariant"
+        },
+        {
+          "row": 0,
+          "col": 1,
+          "text": "Joining Annual membership Fee"
+        },
+        {
+          "row": 0,
+          "col": 2,
+          "text": "MinimumSpend forwaiverof annual membershipfee renewal chargesfornext year"
+        },
+        {
+          "row": 0,
+          "col": 3,
+          "text": "FuelTransaction SurchargePlusGST"
+        },
+        {
+          "row": 0,
+          "col": 4,
+          "text": "Foreign Currency Transactions Of transaction value"
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "text": "InfiniaMetal Edition"
+        },
+        {
+          "row": 1,
+          "col": 1,
+          "text": "12500"
+        },
+        {
+          "row": 1,
+          "col": 2,
+          "text": "10Lakh Annum"
+        },
+        {
+          "row": 1,
+          "col": 3,
+          "text": "Waivercappedat1000NLeverybillingcycle"
+        },
+        {
+          "row": 1,
+          "col": 4,
+          "text": "2"
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "text": "Infinia"
+        },
+        {
+          "row": 2,
+          "col": 1,
+          "text": "10000"
+        },
+        {
+          "row": 2,
+          "col": 2,
+          "text": "8LakhAnnum"
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "text": "DinersBlack MetalEdition"
+        },
+        {
+          "row": 3,
+          "col": 2,
+          "text": "8LakhAnnum"
+        },
+        {
+          "row": 3,
+          "col": 3,
+          "text": "NotApplicable"
+        },
+        {
+          "row": 4,
+          "col": 0,
+          "text": "DinersBlack"
+        },
+        {
+          "row": 4,
+          "col": 2,
+          "text": "5LakhAnnum"
+        },
+        {
+          "row": 4,
+          "col": 3,
+          "text": "Waivercappedat1000 everybillingcycle"
+        },
+        {
+          "row": 5,
+          "col": 0,
+          "text": "HOGDiners Club"
+        },
+        {
+          "row": 5,
+          "col": 1,
+          "text": "10000"
+        },
+        {
+          "row": 5,
+          "col": 2,
+          "text": "5LakhAnnum"
+        },
+        {
+          "row": 5,
+          "col": 3,
+          "text": "Waivercappedat1000 everybillingcycle"
+        },
+        {
+          "row": 6,
+          "col": 0,
+          "text": "BizBlackMetal Card"
+        },
+        {
+          "row": 6,
+          "col": 2,
+          "text": "75Lakh Annum"
+        },
+        {
+          "row": 6,
+          "col": 3,
+          "text": "NA"
+        },
+        {
+          "row": 7,
+          "col": 0,
+          "text": "RegaliaGold"
+        },
+        {
+          "row": 7,
+          "col": 1,
+          "text": "2500"
+        },
+        {
+          "row": 7,
+          "col": 2,
+          "text": "4LakhAnnum"
+        },
+        {
+          "row": 8,
+          "col": 0,
+          "text": "BizPower"
+        },
+        {
+          "row": 9,
+          "col": 0,
+          "text": "TataNeuInfinity HDFCBank"
+        },
+        {
+          "row": 9,
+          "col": 1,
+          "text": "1499"
+        },
+        {
+          "row": 9,
+          "col": 2,
+          "text": "3LakhAnnum"
+        },
+        {
+          "row": 9,
+          "col": 3,
+          "text": "Waivercappedat500 everybillingcycle ForRegaliaDoctors RegaliaBusiness RegaliaWaivedfor transactionbetween 400to5000 DinersPrivilegeHarley DavidsonDinersclub Fuelsurchargewaiver notapplicable"
+        }
+      ],
+      "merged_regions": [
+        {
+          "top_row": 1,
+          "left_col": 3,
+          "bottom_row": 2,
+          "right_col": 4,
+          "text": "Waivercappedat1000NLeverybillingcycle"
+        },
+        {
+          "top_row": 1,
+          "left_col": 4,
+          "bottom_row": 3,
+          "right_col": 5,
+          "text": "2"
+        },
+        {
+          "top_row": 2,
+          "left_col": 1,
+          "bottom_row": 3,
+          "right_col": 2,
+          "text": "10000"
+        },
+        {
+          "top_row": 5,
+          "left_col": 1,
+          "bottom_row": 6,
+          "right_col": 2,
+          "text": "10000"
+        },
+        {
+          "top_row": 6,
+          "left_col": 3,
+          "bottom_row": 7,
+          "right_col": 4,
+          "text": "NA"
+        },
+        {
+          "top_row": 7,
+          "left_col": 1,
+          "bottom_row": 8,
+          "right_col": 2,
+          "text": "2500"
+        },
+        {
+          "top_row": 7,
+          "left_col": 2,
+          "bottom_row": 9,
+          "right_col": 3,
+          "text": "4LakhAnnum"
+        }
+      ],
+      "page": 1
+    },
+    {
+      "num_rows": 10,
+      "num_cols": 5,
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "text": "6ERewards IndigoXL"
+        },
+        {
+          "row": 0,
+          "col": 1,
+          "text": "1500"
+        },
+        {
+          "row": 0,
+          "col": 2,
+          "text": "NA"
+        },
+        {
+          "row": 0,
+          "col": 3,
+          "text": "NA"
+        },
+        {
+          "row": 0,
+          "col": 4,
+          "text": "250"
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "text": "RegaliaFirst BusinessRegalia First4"
+        },
+        {
+          "row": 1,
+          "col": 1,
+          "text": "1000"
+        },
+        {
+          "row": 1,
+          "col": 2,
+          "text": "1LakhAnnum"
+        },
+        {
+          "row": 1,
+          "col": 3,
+          "text": "Waivercappedat500 everybillingcycle ForRegaliaDoctors RegaliaBusiness RegaliaWaivedfor transactionbetween 400to5000 DinersPrivilegeHarley DavidsonDinersclub Fuelsurchargewaiver notapplicable"
+        },
+        {
+          "row": 1,
+          "col": 4,
+          "text": "350"
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "text": "DinersClubNLRewardzNLDinersClubNLMiles"
+        },
+        {
+          "row": 3,
+          "col": 3,
+          "text": "Waivercappedat7499 everybillingcycle"
+        },
+        {
+          "row": 4,
+          "col": 0,
+          "text": "DinersPrivilege"
+        },
+        {
+          "row": 4,
+          "col": 1,
+          "text": "1000"
+        },
+        {
+          "row": 4,
+          "col": 2,
+          "text": "3LakhAnnum"
+        },
+        {
+          "row": 4,
+          "col": 3,
+          "text": "DinersPrivilegeFuel surchargewaivernot applicable"
+        },
+        {
+          "row": 5,
+          "col": 0,
+          "text": "Regalia Business sRegaliaDiners ClubPremium DoctorsRegalia HarleyDavidson DinersClubs"
+        },
+        {
+          "row": 5,
+          "col": 1,
+          "text": "2500"
+        },
+        {
+          "row": 5,
+          "col": 2,
+          "text": "3LakhAnnum"
+        },
+        {
+          "row": 5,
+          "col": 3,
+          "text": "Waivercappedat500 everybillingcycleFor RegaliaDoctors RegaliaBusiness RegaliaWaivedfor transactionbetween 400to5000 HarleyDavidsonDiners club Fuelsurchargewaiver notapplicable"
+        },
+        {
+          "row": 6,
+          "col": 0,
+          "text": "6ERewards Indigo"
+        },
+        {
+          "row": 6,
+          "col": 1,
+          "text": "500"
+        },
+        {
+          "row": 6,
+          "col": 2,
+          "text": "NA"
+        },
+        {
+          "row": 6,
+          "col": 3,
+          "text": "NA"
+        },
+        {
+          "row": 7,
+          "col": 0,
+          "text": "HDFCBankUPI RuPayCredit CardHDFC BankUPIRuPay BizCreditCard"
+        },
+        {
+          "row": 7,
+          "col": 1,
+          "text": "250"
+        },
+        {
+          "row": 7,
+          "col": 2,
+          "text": "25000Annum"
+        },
+        {
+          "row": 7,
+          "col": 3,
+          "text": "NA"
+        },
+        {
+          "row": 8,
+          "col": 0,
+          "text": "EasyEMI"
+        },
+        {
+          "row": 8,
+          "col": 2,
+          "text": "50000Annum"
+        },
+        {
+          "row": 8,
+          "col": 3,
+          "text": "Waivercappedat250 everybilling"
+        },
+        {
+          "row": 9,
+          "col": 3,
+          "text": "cycle"
+        }
+      ],
+      "merged_regions": [
+        {
+          "top_row": 1,
+          "left_col": 1,
+          "bottom_row": 2,
+          "right_col": 2,
+          "text": "1000"
+        },
+        {
+          "top_row": 1,
+          "left_col": 2,
+          "bottom_row": 4,
+          "right_col": 3,
+          "text": "1LakhAnnum"
+        },
+        {
+          "top_row": 1,
+          "left_col": 3,
+          "bottom_row": 3,
+          "right_col": 4,
+          "text": "Waivercappedat500 everybillingcycle ForRegaliaDoctors RegaliaBusiness RegaliaWaivedfor transactionbetween 400to5000 DinersPrivilegeHarley DavidsonDinersclub Fuelsurchargewaiver notapplicable"
+        },
+        {
+          "top_row": 1,
+          "left_col": 4,
+          "bottom_row": 3,
+          "right_col": 5,
+          "text": "350"
+        },
+        {
+          "top_row": 2,
+          "left_col": 0,
+          "bottom_row": 3,
+          "right_col": 1,
+          "text": "DinersClubNLRewardzNLDinersClubNLMiles"
+        },
+        {
+          "top_row": 3,
+          "left_col": 1,
+          "bottom_row": 4,
+          "right_col": 3,
+          "text": ""
+        },
+        {
+          "top_row": 7,
+          "left_col": 1,
+          "bottom_row": 8,
+          "right_col": 2,
+          "text": "250"
+        },
+        {
+          "top_row": 8,
+          "left_col": 0,
+          "bottom_row": 10,
+          "right_col": 1,
+          "text": "EasyEMI"
+        },
+        {
+          "top_row": 8,
+          "left_col": 2,
+          "bottom_row": 10,
+          "right_col": 3,
+          "text": "50000Annum"
+        }
+      ],
+      "page": 2
+    }
+  ]
+}
