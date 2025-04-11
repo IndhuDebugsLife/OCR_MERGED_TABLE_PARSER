@@ -29,9 +29,9 @@ def visualize_cell_and_segment(image_path, cell, segment, output_path="visualiza
     print(f"Visualization saved to {output_path}")
 
 if __name__ == "__main__":
-    image_path = "./data/images/page_2.png"  # Replace with your image path
+    image_path = "./data/images/page_1.png"  # Replace with your image path
    # cell = (561, 2582, 945, 2649) 
-    cell =(0, 0, 0, 0)
+    cell =(561, 1942, 945, 2073)
     segment =110, 241, 2358, 241
 
     visualize_cell_and_segment(image_path, cell, segment) 

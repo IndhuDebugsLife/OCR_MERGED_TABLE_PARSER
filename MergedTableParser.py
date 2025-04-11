@@ -8,6 +8,40 @@ import pandas as pd
 from PIL import Image
 from collections import defaultdict
 import json
+from pypdf import PdfReader, PdfWriter
+
+def extract_pdf_pages(input_pdf_path, output_pdf_path, start_page, end_page):
+    """
+    Extracts a range of pages from an input PDF and saves them to a new PDF.
+
+    Args:
+        input_pdf_path (str): Path to the input PDF file.
+        output_pdf_path (str): Path to save the output PDF file.
+        start_page (int): The starting page number (1-based index).
+        end_page (int): The ending page number (1-based index).
+    """
+    try:
+        with open(input_pdf_path, "rb") as input_file:
+            reader = PdfReader(input_file)
+            writer = PdfWriter()
+
+            if start_page < 1 or end_page > len(reader.pages) or start_page > end_page:
+                raise ValueError("Invalid page range.")
+
+            for page_num in range(start_page - 1, end_page):  # Convert to 0-based index
+                writer.add_page(reader.pages[page_num])
+
+            with open(output_pdf_path, "wb") as output_file:
+                writer.write(output_file)
+
+        print(f"Pages {start_page} to {end_page} extracted successfully to {output_pdf_path}")
+
+    except FileNotFoundError:
+        print(f"Error: Input PDF file not found at {input_pdf_path}")
+    except ValueError as e:
+        print(f"Error: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
 
 def convert_pdf_to_images(pdf_path, output_folder, dpi=300):
     """
@@ -311,33 +345,34 @@ def identify_cells_from_grid(intersections, img_shape, h_segments, v_segments, t
                     if grid[r, col_start]:
                         row_end = r
                         break
-
+                cell = None
                 # Create cell if both intersections are found
                 if col_end is not None and row_end is not None:
                     top_left = (col_map[col_start], row_map[row_start])
                     bottom_right = (col_map[col_end], row_map[row_end])
-                    #cells.append((top_left[0], top_left[1], bottom_right[0], bottom_right[1]))
                     cell = (top_left[0], top_left[1], bottom_right[0], bottom_right[1])
                   #  print(f"Cell found: {cells[-1]}") check here to see cells right away
-                #else:
-                 #   print(f"Cell start at grid[{row_start}, {col_start}] but could not find both horizontal and vertical intersections.")
-                    
-                    cells.append(cell)
-                
-              # Verify cell boundaries and expand if necessary
-                if verify_cell_boundaries(cell, h_segments, v_segments, tolerance):
-                    cells.append(cell)
-                    print(f"  Cell added: (x1={cell[0]}, y1={cell[1]}, x2={cell[2]}, y2={cell[3]})")
                 else:
-                    print(f"  Cell boundaries not verified, attempting expansion...")
-                    cell = expand_cell_boundaries(cell, h_segments, v_segments, row_positions, col_positions, tolerance)
-                    if cell:
-                        merged_cells.append(cell)
-                        print(f"  Expanded cell added: (x1={cell[0]}, y1={cell[1]}, x2={cell[2]}, y2={cell[3]})")
+                    print(f"  No valid bottom-right corner found.")
+                    
+                    #cells.append(cell)
+                print(f"Value of cell before unpacking: {cell}")
+                if cell is not None:
+              # Verify cell boundaries and expand if necessary
+                    if verify_cell_boundaries(cell, h_segments, v_segments, tolerance):
+                        cells.append(cell)
+                        print(f"  Cell added: (x1={cell[0]}, y1={cell[1]}, x2={cell[2]}, y2={cell[3]})")
                     else:
-                        print("  Expansion failed.")
-            else:
-                print(f"  No valid bottom-right corner found.") 
+                        print(f"  Cell boundaries not verified, attempting expansion...")
+                        cell = expand_cell_boundaries(cell, h_segments, v_segments, row_positions, col_positions, tolerance)
+                        if cell:
+                            merged_cells.append(cell)
+                            print(f"  Expanded cell added: (x1={cell[0]}, y1={cell[1]}, x2={cell[2]}, y2={cell[3]})")
+                        else:
+                            print("  Expansion failed.")
+                else:
+                    print("  Skipping verification and expansion because cell is None.")
+             
 
     print("Cell identification complete.")
     for i, (x1, y1, x2, y2) in enumerate(cells):
@@ -854,35 +889,30 @@ def handle_table_continuation(current_page_data, prev_page_data=None, tolerance=
     print("Exiting handle_table_continuation function.")
     return current_page_data
 
-def process_multi_page_table_old(image_paths):
+
+
+def  process_multi_page_table_updated(image_paths):
     """
-    Process a table spanning multiple pages
+    Process a table spanning multiple pages with improved merged cell handling
     """
-    all_cells = []
+    all_page_cells = []
+    all_page_tables = []
     prev_page_data = None
-    
+    header = None
+    combined_table_data = []
+    first_page_processed = False
+
     for i, image_path in enumerate(image_paths):
         print(f"Processing page {i+1}/{len(image_paths)}")
-          
-        # Package current page data
-       
-        
+
         # Process the current page
         img, gray, binary = preprocess_image(image_path)
         horizontal, vertical, mask, contours = detect_table_structure(binary)
         h_segments, v_segments = detect_line_segments(horizontal, vertical)
         intersections = find_grid_intersections(h_segments, v_segments)
-        h_segments, v_segments = filter_border_lines(h_segments, v_segments, img.shape[:2],intersections)
-        intersectionsValid=remove_border_intersections(intersections,h_segments,v_segments)
-        print("Horizontal Line Segments Filtered:")
-        for segment in h_segments:
-                print(segment)
-            
-        print("\nVertical Line Segments Filtered:")
-        for segment in v_segments:
-                print(segment)
-        
-        
+        h_segments, v_segments = filter_border_lines(h_segments, v_segments, img.shape[:2], intersections)
+        intersectionsValid = remove_border_intersections(intersections, h_segments, v_segments)
+
         current_page_data = {
             'intersections': intersectionsValid,
             'h_segments': h_segments,
@@ -890,7 +920,6 @@ def process_multi_page_table_old(image_paths):
             'img_shape': img.shape[:2]
         }
         
-
         # Save debug images after filtering
         output_folder = "./data/output"
         line_img = img.copy()
@@ -900,200 +929,81 @@ def process_multi_page_table_old(image_paths):
             cv2.line(line_img, (x1, y1), (x2, y2), (255, 0, 255) , 2)
         cv2.imwrite(os.path.join(output_folder, f"filtered_lines_page_{i+1}.png"), line_img)
 
-        
-      
-        
         # Handle table continuation if not the first page
         if i > 0 and prev_page_data is not None:
             current_page_data = handle_table_continuation(current_page_data, prev_page_data)
-        
-         # Re-extract the updated intersections and segments
-        intersections = current_page_data['intersections']
-        h_segments = current_page_data['h_segments']
-        v_segments = current_page_data['v_segments']
-        
-        # Process cells with the updated intersections
-        cells, merged_cells = identify_cells_from_grid(intersections, img.shape[:2], h_segments, v_segments)
-        
-        # Extract text from cells
-        cell_data, img_with_cells = extract_text_from_cells_final(cells, merged_cells, gray, img)
-        grid_data = organize_cells_into_grid(cell_data)
-        final_table = propagate_merged_cell_content(grid_data, cell_data)
-        
-        # Step 4: Generate output formats
-        markdown_table = generate_markdown_table(final_table)
-        json_output = {
-            "table_data": final_table,
-            "raw_format": "markdown",
-            "markdown": markdown_table
-        }
-        
-        # Save debug image
-        output_folder = "./data/output"
-        cv2.imwrite(os.path.join(output_folder, f"detected_cells_page_{i+1}.png"), img_with_cells)
-        
-        # Add page number to each cell
-        for cell in cell_data:
-            cell['page'] = i+1
-        
-        # Add cells to the overall list
-        all_cells.extend(cell_data)
-        
-        # Prepare data for the next page
-        if i == 0 or len(intersections) > 0:
-            # Cluster points by x-coordinate (columns)
-            col_clusters = cluster_points(intersections, axis=0, tolerance=15)
-            col_positions = sorted(col_clusters.keys())
-            
-            prev_page_data = {
-                'intersections': intersections,
-                'col_positions': col_positions,
-                'img_shape': img.shape[:2]
-            }
-            print(f"Column positions for page {i+1}: {col_positions}")
-        else:
-            print(f"No intersections found on page {i+1}, using previous page data.")
-    
-    return all_cells
 
-def process_multi_page_table_updated(image_paths):
-    """
-    Process a table spanning multiple pages with improved merged cell handling
-    """
-    all_cells = []
-    all_tables = []
-    prev_page_data = None
-    
-    for i, image_path in enumerate(image_paths):
-        print(f"Processing page {i+1}/{len(image_paths)}")
-          
-        # Process the current page
-        img, gray, binary = preprocess_image(image_path)
-        horizontal, vertical, mask, contours = detect_table_structure(binary)
-        h_segments, v_segments = detect_line_segments(horizontal, vertical)
-        intersections = find_grid_intersections(h_segments, v_segments)
-        h_segments, v_segments = filter_border_lines(h_segments, v_segments, img.shape[:2], intersections)
-        intersectionsValid = remove_border_intersections(intersections, h_segments, v_segments)
-        
-        current_page_data = {
-            'intersections': intersectionsValid,
-            'h_segments': h_segments,
-            'v_segments': v_segments,
-            'img_shape': img.shape[:2]
-        }
-        
-        # Handle table continuation if not the first page
-        if i > 0 and prev_page_data is not None:
-            current_page_data = handle_table_continuation(current_page_data, prev_page_data)
-        
         # Re-extract the updated intersections and segments
         intersections = current_page_data['intersections']
         h_segments = current_page_data['h_segments']
         v_segments = current_page_data['v_segments']
-        
+
+        output_folder = "./data/output"
+        line_img = img.copy()
+        for x1, y1, x2, y2 in h_segments:
+            cv2.line(line_img, (x1, y1), (x2, y2), (0, 255, 255), 2)
+        for x1, y1, x2, y2 in v_segments:
+            cv2.line(line_img, (x1, y1), (x2, y2), (255, 0, 255) , 2)
+        cv2.imwrite(os.path.join(output_folder, f"synth_lines_page_{i+1}.png"), line_img)
+
         # Process cells with the updated intersections
         cells, merged_cells = identify_cells_from_grid(intersections, img.shape[:2], h_segments, v_segments)
-        
+
         # Extract text from cells
         cell_data, img_with_cells = extract_text_from_cells_final(cells, merged_cells, gray, img)
-        
+
         # New improved grid organization and merged cell handling
         grid, updated_cell_data = organize_cells_into_grid(cell_data)
         final_table = propagate_merged_cell_content(grid, updated_cell_data)
-        
-        # Export to various formats
-        output_folder = "./data/output"
-        output_paths = export_to_output_formats(final_table, updated_cell_data, output_folder, i+1)
-        
+
         # Save debug image
+        output_folder = "./data/output"
+        os.makedirs(output_folder, exist_ok=True)
         cv2.imwrite(os.path.join(output_folder, f"detected_cells_page_{i+1}.png"), img_with_cells)
-        
+
         # Add page number to each cell
         for cell in cell_data:
             cell['page'] = i+1
-        
-        # Add cells to the overall list
-        all_cells.extend(cell_data)
-        all_tables.append({
+
+        # Store all cells and tables per page
+        all_page_cells.extend(cell_data)
+        all_page_tables.append({
             'page': i+1,
             'table': final_table,
-            'output_paths': output_paths
+            'raw_cell_data': updated_cell_data # Keep raw cell data for potential header
         })
-        
+
+        # Extract header from the first page
+        if i == 0 and final_table and 0 in final_table:
+            header_row = final_table[0]
+            header = [header_row.get(col, {}).get('text', '') for col in sorted(header_row.keys())]
+            # Store the data rows from the first page (excluding the header)
+            for row_num in sorted(final_table.keys()):
+                if row_num > 0:
+                    row_data = [final_table[row_num].get(col, {}).get('text', '') for col in sorted(final_table[row_num].keys())]
+                    combined_table_data.append(row_data)
+            first_page_processed = True
+        elif i > 0 and final_table:
+            # Append data rows from subsequent pages
+            for row_num in sorted(final_table.keys()):
+                row_data = [final_table[row_num].get(col, {}).get('text', '') for col in sorted(final_table[row_num].keys())]
+                combined_table_data.append(row_data)
+
         # Prepare data for the next page
-        if i == 0 or len(intersections) > 0:
+        if len(intersections) > 0: # Keep this condition
             # Cluster points by x-coordinate (columns)
             col_clusters = cluster_points(intersections, axis=0, tolerance=15)
             col_positions = sorted(col_clusters.keys())
-            
+
             prev_page_data = {
                 'intersections': intersections,
                 'col_positions': col_positions,
                 'img_shape': img.shape[:2]
             }
-        
-    # Generate a combined output for all pages
-    combined_markdown = ""
-    combined_json = {"pages": []}
-    
-    for table_info in all_tables:
-        # Read the individual page outputs
-        with open(table_info['output_paths']['markdown_path'], 'r') as f:
-            markdown_content = f.read()
-        
-        with open(table_info['output_paths']['json_path'], 'r') as f:
-            json_content = json.load(f)
-        
-        # Add page number to the content
-        combined_markdown += f"\n## Page {table_info['page']}\n\n{markdown_content}\n"
-        json_content["page"] = table_info['page']
-        combined_json["pages"].append(json_content)
-    
-    # Write the combined outputs
-    with open(os.path.join(output_folder, "combined_table.md"), 'w') as f:
-        f.write(combined_markdown)
-    
-    with open(os.path.join(output_folder, "combined_table.json"), 'w') as f:
-        json.dump(combined_json, f, indent=2)
-    
-    print(f"Generated combined outputs at {output_folder}/combined_table.md and {output_folder}/combined_table.json")
-    
-    return all_cells, all_tables
-def combine_table_data(all_cells):
-    """
-    Combine cell data from multiple pages into a coherent table structure
-    """
-    row_groups = []
-    current_page = 1
-    current_row_group = []
-    
-    sorted_cells = sorted(all_cells, key=lambda x: (x['page'], x['y1']))
-    
-    for cell in sorted_cells:
-        if cell['page'] > current_page:
-            if current_row_group:
-                row_groups.append(current_row_group)
-                current_row_group = []
-            current_page = cell['page']
-        
-        if not current_row_group or abs(cell['y1'] - current_row_group[0]['y1']) < 10:
-            current_row_group.append(cell)
-        else:
-            row_groups.append(current_row_group)
-            current_row_group = [cell]
-    
-    if current_row_group:
-        row_groups.append(current_row_group)
-    
-    table_data = []
-    for row_idx, row_cells in enumerate(row_groups):
-        row_cells = sorted(row_cells, key=lambda x: x['x1'])
-        row_data = [cell['text'] for cell in row_cells]
-        table_data.append(row_data)
-    
-    df = pd.DataFrame(table_data)
-    
-    return df
+        elif i == 0:
+            prev_page_data = {'col_positions': []} # Initialize for the next page check
+
+    return header, combined_table_data
 
 def filter_border_lines_old(h_segments, v_segments, img_shape, margin=15):
     """
@@ -1324,6 +1234,7 @@ def remove_border_intersections(intersections, h_fil_segments, v_fil_segments):
             filtered_intersections.append((x, y))
 
     return filtered_intersections
+
 def organize_cells_into_grid(cell_data):
     """
     Organize cells into a grid-like structure based on their spatial positions.
@@ -1381,14 +1292,17 @@ def propagate_merged_cell_content(grid, cell_data):
     """
     # Create a cell lookup by ID for quick access
     cell_lookup = {cell['id']: cell for cell in cell_data}
-    
+    print("cell_lookup:", cell_lookup)
+
     # Create a new data structure for the finalized table
     final_table = {}
     
-    # Find the maximum row and column indices
+    # Find the maximum row and column indices 
     max_row = max(grid.keys()) if grid else 0
     max_col = max(max(row_dict.keys()) for row_dict in grid.values()) if grid else 0
-    
+    print("max_row:", max_row)
+    print("max_col:", max_col)
+
     # Initialize the final table structure
     for r in range(max_row + 1):
         final_table[r] = {}
@@ -1407,11 +1321,13 @@ def propagate_merged_cell_content(grid, cell_data):
                     final_table[r][c]["text"] = cell['text']
                     final_table[r][c]["is_merged"] = False
                     final_table[r][c]["merged_from"] = None
+                    print(f"  final_table[{r}][{c}] updated:", final_table[r][c])
                 else:
                     # This is a position covered by a merged cell
                     final_table[r][c]["text"] = cell['text']  # Repeat the text
                     final_table[r][c]["is_merged"] = True
                     final_table[r][c]["merged_from"] = (cell['row'], cell['col'])
+                    print(f"  final_table[{r}][{c}] updated (merged):", final_table[r][c])
     
     return final_table
 
@@ -1560,51 +1476,95 @@ def export_to_output_formats(final_table, cell_data, output_folder, page_num):
         "csv_path": csv_path
     }
 
-# Update the main process_multi_page_table function to use these new functions
+def export_single_table_to_output_formats(header, table_data, output_folder):
+    """
+    Export the combined table (with header) to various output formats.
+    """
+    os.makedirs(output_folder, exist_ok=True)
+    page_num = "combined" # Indicate it's the combined table
 
-def main():
-    pdf_path ="./data/HDFC1.pdf"
-    images_folder ="./data/images"
-    image_path = "./data/images/page_2.png"
-    output_folder= "./data/output"
-    i=1
-   # image_paths=preprocess_image_gem( image_path)
-    image_paths = convert_pdf_to_images(pdf_path, images_folder, 300)
-    all_cells,all_tables=process_multi_page_table_updated(image_paths)
+    # Generate markdown
+    markdown_table = "| " + " | ".join(header) + " |\n"
+    markdown_table += "| " + " | ".join(["---"] * len(header)) + " |\n"
+    for row in table_data:
+        markdown_table += "| " + " | ".join(row) + " |\n"
+    markdown_path = os.path.join(output_folder, f"table_{page_num}.md")
+    with open(markdown_path, 'w') as f:
+        f.write(markdown_table)
+
+    # Generate JSON structure
+    json_structure = {
+        "header": header,
+        "data": table_data
+    }
+    json_path = os.path.join(output_folder, f"table_{page_num}.json")
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(json_structure, f, indent=2, ensure_ascii=False)
+
+    # Generate a simple CSV format
+    csv_path = os.path.join(output_folder, f"table_{page_num}.csv")
+    with open(csv_path, 'w') as f:
+        f.write(",".join(header) + "\n")
+        for row in table_data:
+            f.write(",".join(row) + "\n")
+
+    print(f"Exported the combined table to:")
+    print(f"  - Markdown: {markdown_path}")
+    print(f"  - JSON: {json_path}")
+    print(f"  - CSV: {csv_path}")
+
+    return {
+        "markdown_path": markdown_path,
+        "json_path": json_path,
+        "csv_path": csv_path
+    }
+
+def merge_table_parser(input_pdf, start_page_num, end_page_num, dpi=300, output_folder="./data/output"):
+    """
+    Process multi-page tables from PDF documents for RAG applications.
     
-    """img, gray, binary = preprocess_image(image_path)
-    horizontal, vertical, mask, contours = detect_table_structure(binary)
-    cv2.imwrite(os.path.join(output_folder, f"horizontal_lines_{i+1}.png"), horizontal)
-    cv2.imwrite(os.path.join(output_folder, f"vertical_lines_{i+1}.png"), vertical)
-    cv2.imwrite(os.path.join(output_folder, f"table_mask_{i+1}.png"), mask)
-    h_segments, v_segments = detect_line_segments(horizontal, vertical)
-   
+    Args:
+        input_pdf (str): Path to the input PDF file
+        start_page_num (int): Starting page number to extract
+        end_page_num (int): Ending page number to extract
+        dpi (int, optional): Image resolution for PDF conversion. Defaults to 300.
+        output_folder (str, optional): Output directory for results. Defaults to "./data/output".
+        
+    Returns:
+        tuple: (header, combined_table_data) - The extracted header and table data
+    """
     
-     # Draw line segments for debugging
-    line_img = img.copy()
-    for x1, y1, x2, y2 in h_segments: 
-                cv2.line(line_img, (x1, y1), (x2, y2), (0, 0, 255), 2)
-    for x1, y1, x2, y2 in v_segments:
-                cv2.line(line_img, (x1, y1), (x2, y2), (255, 0, 0), 2)
-    cv2.imwrite(os.path.join(output_folder, f"detected_lines_{i+1}.png"), line_img)
-# Step 5: Find grid intersections
-    intersections = find_grid_intersections(h_segments, v_segments)
-            
-    # Draw intersections for debugging
-    intersection_img = img.copy()
-    for x, y in intersections:
-                cv2.circle(intersection_img, (x, y), 5, (0, 255, 255), -1)
-    cv2.imwrite(os.path.join(output_folder, f"intersections_{i+1}.png"), intersection_img)
+    
+    # Create necessary directories if they don't exist
+    os.makedirs(output_folder, exist_ok=True)
+    
+    # Define intermediate file paths
+    temp_pdf_path = os.path.join(output_folder, "temp_extracted.pdf")
+    images_folder = os.path.join(output_folder, "images")
+    os.makedirs(images_folder, exist_ok=True)
+    
+    # Extract specified pages from the PDF
+    extract_pdf_pages(input_pdf, temp_pdf_path, start_page_num, end_page_num)
+    
+    # Convert PDF to images
+    image_paths = convert_pdf_to_images(temp_pdf_path, images_folder, dpi)
+    
+    # Process the multi-page table
+    header, combined_table_data = process_multi_page_table_updated(image_paths)
+    
+    # Export results if header was found
+    if header is not None:
+        export_single_table_to_output_formats(header, combined_table_data, output_folder)
+        return header, combined_table_data
+    else:
+        print("Warning: Could not extract a header from the first page.")
+        return None, combined_table_data
 
-
-# Step 6: Identify cells from the grid
-   
-    cells,merged_cells=identify_cells_from_grid(intersections,img.shape[:2],h_segments,v_segments)
-     
-# Step 7: Extract text from cells
-    cell_data, img_with_cells = extract_text_from_cells_final(cells,merged_cells, gray, img)
-    cv2.imwrite(os.path.join(output_folder, f"detected_cells_new_{i+1}.png"), img_with_cells)"""
-
-
+# For standalone execution
 if __name__ == "__main__":
-    main()
+    input_pdf = "./data/TestPDF.pdf"
+    merge_table_parser(
+        input_pdf=input_pdf,
+        start_page_num=1,
+        end_page_num=1
+    )
